@@ -3,24 +3,293 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Distributed Systems Frontend</title>
-    <link rel="stylesheet" href="styles.css">
-    <!-- Bootstrap CSS -->
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <title>DW Project Fruits App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-    <header class="bg-primary text-white text-center py-3">
-        <h1>Welcome to Distributed Systems Frontend</h1>
-    </header>
-    <main class="container mt-4">
-        <p>This is the main content area.</p>
-    </main>
-    <footer class="bg-light text-center py-3">
-        <p>&copy; 2023 Distributed Systems</p>
-    </footer>
-    <!-- Bootstrap JS and dependencies -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <div class="container mt-5">
+        <!-- Login Form -->
+        <div id="login-section" class="d-none">
+            <h2>Login</h2>
+            <form id="login-form">
+                <div class="mb-3">
+                    <label for="email" class="form-label">Email address</label>
+                    <input type="email" class="form-control" id="email" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+        </div>
+
+        <!-- Fruits Section -->
+        <div id="fruits-section" class="d-none">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2>Fruits</h2>
+                <button class="btn btn-success" id="add-fruit-btn">Add Fruit</button>
+                <button class="btn btn-secondary" id="logout-btn">Logout</button>
+            </div>
+            <div id="fruits-container" class="row g-3">
+                <!-- Fruit Cards Rendered Dynamically Here -->
+            </div>
+        </div>
+
+        <!-- Add/Edit Fruit Modal -->
+        <div class="modal fade" id="fruit-modal" tabindex="-1" aria-labelledby="fruitModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="fruitModalLabel">Add Fruit</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="fruit-form">
+                            <div class="mb-3">
+                                <label for="fruit-name" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="fruit-name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="fruit-description" class="form-label">Description</label>
+                                <textarea class="form-control" id="fruit-description" required></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="fruit-origin" class="form-label">Origin</label>
+                                <input type="text" class="form-control" id="fruit-origin" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="fruit-seasonality" class="form-label">Seasonality</label>
+                                <input type="text" class="form-control" id="fruit-seasonality">
+                            </div>
+                            <div class="mb-3">
+                                <label for="fruit-storage" class="form-label">Storage Place</label>
+                                <input type="text" class="form-control" id="fruit-storage">
+                            </div>
+                            <div class="mb-3">
+                                <label for="fruit-period" class="form-label">Period</label>
+                                <input type="text" class="form-control" id="fruit-period">
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" id="save-fruit-btn">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_BASE_URL = 'http://localhost:3306';
+        const tokenKey = 'remember_token';
+        
+        const loginSection = document.getElementById('login-section');
+        const fruitsSection = document.getElementById('fruits-section');
+        const loginForm = document.getElementById('login-form');
+        const fruitsContainer = document.getElementById('fruits-container');
+        const addFruitBtn = document.getElementById('add-fruit-btn');
+        const fruitModal = new bootstrap.Modal(document.getElementById('fruit-modal'));
+        const fruitForm = document.getElementById('fruit-form');
+        const saveFruitBtn = document.getElementById('save-fruit-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+
+        let currentFruitId = null; // To track fruit for editing
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem(tokenKey);
+            if (token) {
+                showFruitsSection();
+                fetchFruits();
+            } else {
+                showLoginSection();
+            }
+        });
+
+        // Show Login Section
+        function showLoginSection() {
+            loginSection.classList.remove('d-none');
+            fruitsSection.classList.add('d-none');
+        }
+
+        // Show Fruits Section
+        function showFruitsSection() {
+            loginSection.classList.add('d-none');
+            fruitsSection.classList.remove('d-none');
+        }
+
+        // Handle Login
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password }),
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    localStorage.setItem(tokenKey, data.remember_token);
+                    showFruitsSection();
+                    fetchFruits();
+                } else {
+                    alert('Login failed: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+            }
+        });
+
+        // Fetch Fruits
+        async function fetchFruits() {
+            try {
+                const token = localStorage.getItem(tokenKey);
+                const response = await fetch(`${API_BASE_URL}/fruits`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    renderFruits(data);
+                } else {
+                    alert('Failed to fetch fruits: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Fetch fruits error:', error);
+            }
+        }
+
+        // Render Fruits
+        function renderFruits(fruits) {
+            fruitsContainer.innerHTML = '';
+            fruits.forEach(fruit => {
+                const card = document.createElement('div');
+                card.className = 'col-md-4';
+                card.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">${fruit.name}</h5>
+                            <p class="card-text">${fruit.description}</p>
+                            <button class="btn btn-primary edit-fruit-btn" data-id="${fruit.id}">Edit</button>
+                            <button class="btn btn-danger delete-fruit-btn" data-id="${fruit.id}">Delete</button>
+                        </div>
+                    </div>
+                `;
+                fruitsContainer.appendChild(card);
+            });
+
+            // Attach event listeners for edit and delete buttons
+            document.querySelectorAll('.edit-fruit-btn').forEach(btn => {
+                btn.addEventListener('click', handleEditFruit);
+            });
+
+            document.querySelectorAll('.delete-fruit-btn').forEach(btn => {
+                btn.addEventListener('click', handleDeleteFruit);
+            });
+        }
+
+        // Handle Add/Edit Fruit
+        addFruitBtn.addEventListener('click', () => {
+            currentFruitId = null;
+            fruitForm.reset();
+            document.getElementById('fruitModalLabel').textContent = 'Add Fruit';
+            fruitModal.show();
+        });
+
+        saveFruitBtn.addEventListener('click', async () => {
+            const name = document.getElementById('fruit-name').value;
+            const description = document.getElementById('fruit-description').value;
+            const origin = document.getElementById('fruit-origin').value;
+            const seasonality = document.getElementById('fruit-seasonality').value;
+            const storage = document.getElementById('fruit-storage').value;
+            const period = document.getElementById('fruit-period').value;
+
+            const payload = { name, description, origin, seasonality, storage, period };
+            const token = localStorage.getItem(tokenKey);
+
+            try {
+                const url = currentFruitId ? `${API_BASE_URL}/fruits/${currentFruitId}` : `${API_BASE_URL}/fruits`;
+                const method = currentFruitId ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    fetchFruits();
+                    fruitModal.hide();
+                } else {
+                    alert('Failed to save fruit: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Save fruit error:', error);
+            }
+        });
+
+        // Handle Edit Fruit
+        function handleEditFruit(e) {
+            currentFruitId = e.target.getAttribute('data-id');
+
+            // Fetch fruit details and populate form
+            const fruit = Array.from(fruitsContainer.children).find(card => card.querySelector('.edit-fruit-btn').getAttribute('data-id') === currentFruitId);
+
+            if (fruit) {
+                document.getElementById('fruit-name').value = fruit.querySelector('.card-title').textContent;
+                document.getElementById('fruit-description').value = fruit.querySelector('.card-text').textContent;
+            }
+
+            document.getElementById('fruitModalLabel').textContent = 'Edit Fruit';
+            fruitModal.show();
+        }
+
+        // Handle Delete Fruit
+        async function handleDeleteFruit(e) {
+            const fruitId = e.target.getAttribute('data-id');
+            const token = localStorage.getItem(tokenKey);
+
+            if (confirm('Are you sure you want to delete this fruit?')) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/fruits/${fruitId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                        },
+                    });
+
+                    if (response.ok) {
+                        fetchFruits();
+                    } else {
+                        const data = await response.json();
+                        alert('Failed to delete fruit: ' + data.message);
+                    }
+                } catch (error) {
+                    console.error('Delete fruit error:', error);
+                }
+            }
+        }
+
+        // Handle Logout
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem(tokenKey);
+            showLoginSection();
+        });
+    </script>
 </body>
 </html>
